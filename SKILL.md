@@ -1,12 +1,12 @@
 ---
 name: red-alert-hooks
-version: 1.0.0
+version: 1.1.0
 description: |
   Configure Claude Code hooks with Command & Conquer Red Alert classic sound effects.
-  Downloads WAV files from GitHub and wires them to 8 Claude Code lifecycle events:
-  SessionStart, Stop, Notification, PostToolUse(Write/Edit), PostToolUse(Bash),
-  PostToolUseFailure, PermissionRequest, PreCompact.
+  Maps 8 Claude Code lifecycle events to iconic unit voices (Mission accomplished!,
+  Yes sir!, Awaiting orders!, Sure thing boss!, etc.).
   Works on Windows (PowerShell SoundPlayer), macOS (afplay), Linux (aplay/paplay).
+  Sound files are bundled — no download needed to get started.
 allowed-tools:
   - Bash
   - Read
@@ -17,75 +17,77 @@ allowed-tools:
 
 # Red Alert Hooks — Setup Skill
 
-You are configuring Claude Code to play Command & Conquer Red Alert sound effects at key lifecycle events. Follow the steps below precisely.
+You are configuring Claude Code to play Command & Conquer Red Alert sound effects at key lifecycle events.
 
 ---
 
-## Sound Source
+## Sound Files
 
-All WAV files come from this public GitHub repository (built specifically for Claude Code hooks):
+8 core WAV files are **bundled with this skill** in the `sounds/` subdirectory — no download needed.
 
+Skill sounds directory (after installation):
+```
+~/.claude/skills/red-alert-hooks/sounds/
+```
+
+| File | Hook | Content |
+|------|------|---------|
+| `ra_construction_complete.wav` | SessionStart | Construction complete chime |
+| `ra_mission_accomplished.wav` | Stop | "Mission accomplished!" |
+| `ra_awaiting_orders_allied_infantry_1.wav` | Notification | "Awaiting orders!" |
+| `ra_yes_sir_allied_infantry_1.wav` | PostToolUse Write/Edit | "Yes sir!" |
+| `ra_mechanic_sure_thing_boss.wav` | PostToolUse Bash | "Sure thing, boss!" |
+| `ra_mission_failed.wav` | PostToolUseFailure | "Mission failed" |
+| `ra_spy_commander.wav` | PermissionRequest | "Commander." |
+| `ra_base_under_attack.wav` | PreCompact | Base under attack alarm |
+
+For **150+ additional sounds** (Tanya, Soviet infantry, Shock Trooper, etc.), see:
 **`https://github.com/mgmobrien/red-alert-sounds`**
 
-Raw file base URL:
-```
-https://raw.githubusercontent.com/mgmobrien/red-alert-sounds/main/
-```
-
-Notable files available (browse the repo for 150+ more):
-
-| File | Content |
-|------|---------|
-| `ra_construction_complete.wav` | Construction complete chime |
-| `ra_mission_accomplished.wav` | "Mission accomplished!" |
-| `ra_awaiting_orders_allied_infantry_1.wav` | "Awaiting orders!" |
-| `ra_yes_sir_allied_infantry_1.wav` | "Yes sir!" |
-| `ra_mechanic_sure_thing_boss.wav` | "Sure thing, boss!" |
-| `ra_mission_failed.wav` | "Mission failed" |
-| `ra_spy_commander.wav` | "Commander." |
-| `ra_base_under_attack.wav` | Base under attack alarm |
-| `ra_tanya_lets_rock.wav` | Tanya: "Let's rock!" |
-| `ra_shock_burn_baby_burn.wav` | Shock trooper: "Burn baby burn!" |
-| `ra_yes_sir_soviet_infantry_1.wav` | Soviet: "Yes sir!" |
-| `td_mission_accomplished.wav` | Tiberian Dawn version |
-
 ---
 
-## Step 1 — Detect OS and set paths
+## Step 1 — Detect OS and resolve sounds path
 
 ```bash
+# Detect OS
 OS=$(uname -s 2>/dev/null || echo "Windows")
-case "$OS" in
-  Darwin)  SOUNDS_DIR="$HOME/sounds/redalert"; PLAY_CMD="afplay" ;;
-  Linux)   SOUNDS_DIR="$HOME/sounds/redalert"; PLAY_CMD="aplay" ;;
-  *)       SOUNDS_DIR="$HOME/sounds/redalert"; PLAY_CMD="powershell_soundplayer" ;;
-esac
-echo "OS: $OS | Dir: $SOUNDS_DIR | Player: $PLAY_CMD"
-mkdir -p "$SOUNDS_DIR"
-```
 
-On Windows, `uname` may not exist — treat any error as Windows.
+# Resolve the skill's bundled sounds directory
+# skills-installer places files at ~/.claude/skills/<skill-name>/
+SKILL_SOUNDS="$HOME/.claude/skills/red-alert-hooks/sounds"
+
+# Verify bundled files exist
+if ls "$SKILL_SOUNDS"/*.wav &>/dev/null; then
+  echo "✓ Bundled sounds found at: $SKILL_SOUNDS"
+else
+  echo "⚠ Bundled sounds not found — will download from GitHub"
+  SKILL_SOUNDS=""
+fi
+
+echo "OS: $OS"
+```
 
 ---
 
-## Step 2 — Download the 8 core sound files
+## Step 2 — If bundled sounds missing, download them
+
+Only run this if Step 1 shows bundled sounds are missing.
 
 ```bash
 BASE="https://raw.githubusercontent.com/mgmobrien/red-alert-sounds/main"
+DEST="$HOME/.claude/skills/red-alert-hooks/sounds"
+mkdir -p "$DEST"
 
-files=(
-  "ra_construction_complete.wav"
-  "ra_mission_accomplished.wav"
-  "ra_awaiting_orders_allied_infantry_1.wav"
-  "ra_yes_sir_allied_infantry_1.wav"
-  "ra_mechanic_sure_thing_boss.wav"
-  "ra_mission_failed.wav"
-  "ra_spy_commander.wav"
-  "ra_base_under_attack.wav"
-)
-
-for f in "${files[@]}"; do
-  curl -sL "$BASE/$f" -o "$SOUNDS_DIR/$f" && echo "✓ $f" || echo "✗ $f"
+for f in \
+  ra_construction_complete.wav \
+  ra_mission_accomplished.wav \
+  ra_awaiting_orders_allied_infantry_1.wav \
+  ra_yes_sir_allied_infantry_1.wav \
+  ra_mechanic_sure_thing_boss.wav \
+  ra_mission_failed.wav \
+  ra_spy_commander.wav \
+  ra_base_under_attack.wav; do
+  curl -sL "$BASE/$f" -o "$DEST/$f" && echo "✓ $f" || echo "✗ $f"
 done
 ```
 
@@ -93,71 +95,76 @@ done
 
 ## Step 3 — Build the play command per OS
 
-**Windows** (PowerShell SoundPlayer — synchronous, works without extra deps):
+Resolve the actual absolute path to the sounds directory.
+
+**Windows** — use PowerShell SoundPlayer with Windows-style path:
+```powershell
+# Get Windows path (convert from bash-style if needed)
+$soundsDir = "$env:USERPROFILE\.claude\skills\red-alert-hooks\sounds"
+# Play command format:
+(New-Object System.Media.SoundPlayer '$soundsDir\FILE.wav').PlaySync()
 ```
-(New-Object System.Media.SoundPlayer 'C:\Users\USERNAME\sounds\redalert\FILE.wav').PlaySync()
-```
-Use `"shell": "powershell"` in the hook. Use Windows backslash paths. Get actual home dir from `$env:USERPROFILE` or expand `~` manually.
+Use `"shell": "powershell"` in the hook config.
 
 **macOS**:
 ```bash
-afplay ~/sounds/redalert/FILE.wav
+afplay ~/.claude/skills/red-alert-hooks/sounds/FILE.wav
 ```
 
 **Linux**:
 ```bash
-aplay ~/sounds/redalert/FILE.wav 2>/dev/null || paplay ~/sounds/redalert/FILE.wav 2>/dev/null || true
+aplay ~/.claude/skills/red-alert-hooks/sounds/FILE.wav 2>/dev/null \
+  || paplay ~/.claude/skills/red-alert-hooks/sounds/FILE.wav 2>/dev/null || true
 ```
 
 ---
 
 ## Step 4 — Read and merge settings.json
 
-Target file: `~/.claude/settings.json` (global, applies to all projects).
+Target: `~/.claude/settings.json` (global settings, applies to all projects).
 
-**Always read the file first before editing.** Merge the `hooks` key — do not overwrite other keys (`env`, `permissions`, `statusLine`, etc.).
+**Always read the file first.** Merge the `hooks` key — preserve all other keys (`env`, `permissions`, `statusLine`, etc.).
 
-Add this hooks block:
+On **Windows**, use backslash paths and `"shell": "powershell"`. The sounds path is:
+`C:\Users\<USERNAME>\.claude\skills\red-alert-hooks\sounds\`
+
+Get the actual username from `$env:USERPROFILE` or `echo $HOME` and convert slashes.
+
+Hooks block to merge in:
 
 ```json
 "hooks": {
-  "SessionStart": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_construction_complete.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ],
-  "Stop": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_mission_accomplished.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ],
-  "Notification": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_awaiting_orders_allied_infantry_1.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ],
+  "SessionStart": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_construction_complete.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }],
+  "Stop": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_mission_accomplished.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }],
+  "Notification": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_awaiting_orders_allied_infantry_1.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }],
   "PostToolUse": [
     {
       "matcher": "Write|Edit",
       "hooks": [{
         "type": "command",
-        "command": "<PLAY_COMMAND for ra_yes_sir_allied_infantry_1.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
+        "command": "<play ra_yes_sir_allied_infantry_1.wav>",
+        "shell": "powershell",
         "async": true
       }]
     },
@@ -165,42 +172,36 @@ Add this hooks block:
       "matcher": "Bash",
       "hooks": [{
         "type": "command",
-        "command": "<PLAY_COMMAND for ra_mechanic_sure_thing_boss.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
+        "command": "<play ra_mechanic_sure_thing_boss.wav>",
+        "shell": "powershell",
         "async": true
       }]
     }
   ],
-  "PostToolUseFailure": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_mission_failed.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ],
-  "PermissionRequest": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_spy_commander.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ],
-  "PreCompact": [
-    {
-      "hooks": [{
-        "type": "command",
-        "command": "<PLAY_COMMAND for ra_base_under_attack.wav>",
-        "shell": "<powershell on Windows, omit on mac/linux>",
-        "async": true
-      }]
-    }
-  ]
+  "PostToolUseFailure": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_mission_failed.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }],
+  "PermissionRequest": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_spy_commander.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }],
+  "PreCompact": [{
+    "hooks": [{
+      "type": "command",
+      "command": "<play ra_base_under_attack.wav>",
+      "shell": "powershell",
+      "async": true
+    }]
+  }]
 }
 ```
 
@@ -208,39 +209,58 @@ Add this hooks block:
 
 ## Step 5 — Validate JSON
 
-On Windows:
+**Windows:**
 ```powershell
 $s = Get-Content "$env:USERPROFILE\.claude\settings.json" -Raw | ConvertFrom-Json
 $s.hooks | Get-Member -MemberType NoteProperty | Select-Object Name
 ```
 
-On Mac/Linux:
+**macOS / Linux:**
 ```bash
-python3 -c "import json; d=json.load(open(os.path.expanduser('~/.claude/settings.json'))); print(list(d['hooks'].keys()))"
+python3 -c "
+import json, os
+d = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+print(list(d['hooks'].keys()))
+"
 ```
 
-Expect 8 keys: `SessionStart, Stop, Notification, PostToolUse, PostToolUseFailure, PermissionRequest, PreCompact` (PostToolUse contains 2 matchers).
+Expect 7 hook event keys (PostToolUse contains 2 matchers).
 
 ---
 
 ## Step 6 — Test play each sound
 
-Play each file once so the user can confirm they all work:
+Play all 8 sounds once for the user to confirm:
 
+**Windows:**
+```powershell
+$dir = "$env:USERPROFILE\.claude\skills\red-alert-hooks\sounds"
+@(
+  "ra_construction_complete",
+  "ra_mission_accomplished",
+  "ra_awaiting_orders_allied_infantry_1",
+  "ra_yes_sir_allied_infantry_1",
+  "ra_mechanic_sure_thing_boss",
+  "ra_mission_failed",
+  "ra_spy_commander",
+  "ra_base_under_attack"
+) | ForEach-Object {
+  Write-Host "▶ $_"
+  (New-Object System.Media.SoundPlayer "$dir\$_.wav").PlaySync()
+  Start-Sleep -Milliseconds 500
+}
+```
+
+**macOS / Linux:**
 ```bash
-DEST="~/sounds/redalert"
-for f in \
-  ra_construction_complete \
-  ra_mission_accomplished \
-  ra_awaiting_orders_allied_infantry_1 \
-  ra_yes_sir_allied_infantry_1 \
-  ra_mechanic_sure_thing_boss \
-  ra_mission_failed \
-  ra_spy_commander \
-  ra_base_under_attack; do
+DIR="$HOME/.claude/skills/red-alert-hooks/sounds"
+for f in ra_construction_complete ra_mission_accomplished \
+  ra_awaiting_orders_allied_infantry_1 ra_yes_sir_allied_infantry_1 \
+  ra_mechanic_sure_thing_boss ra_mission_failed \
+  ra_spy_commander ra_base_under_attack; do
   echo "▶ $f"
-  # Windows: powershell -c "(New-Object System.Media.SoundPlayer '$DEST/$f.wav').PlaySync()"
-  # macOS/Linux: afplay "$DEST/$f.wav"
+  afplay "$DIR/$f.wav" 2>/dev/null || aplay "$DIR/$f.wav" 2>/dev/null
+  sleep 0.5
 done
 ```
 
@@ -249,40 +269,49 @@ done
 ## Step 7 — Handoff
 
 Tell the user:
-1. **Restart Claude Code** (or open `/hooks`) for the new configuration to take effect.
-2. The hooks are global — they apply to every project.
-3. To swap any sound, edit `~/.claude/settings.json` and point to a different WAV from the repo.
-4. To disable a specific hook without deleting it, add `"async": false` and let the command silently fail, or remove that hook entry.
+1. **Restart Claude Code** (or open `/hooks`) for hooks to take effect.
+2. Hooks are global — apply to every project.
+3. To swap a sound, point any hook's command to a different WAV file path.
+4. To disable one hook, remove its entry from `~/.claude/settings.json`.
 
 ---
 
-## Customization Guide (share with users)
+## Customization — Expanding with more sounds
 
-### Swap a sound
-Replace the filename in `settings.json`. Browse all 150+ files at:
+Browse **150+ additional Red Alert sounds** at:
 `https://github.com/mgmobrien/red-alert-sounds`
 
-Popular alternatives:
-- `ra_tanya_lets_rock.wav` — Tanya's "Let's rock!" (fun Stop sound)
-- `ra_shock_burn_baby_burn.wav` — "Burn baby burn!" (wild Bash sound)
-- `ra_yes_sir_soviet_infantry_1.wav` — Soviet accent variant
-- `td_mission_accomplished.wav` — Tiberian Dawn version of mission accomplished
-- `ra_mechanic_yee_haw.wav` — "Yee-haw!" mechanic
+Download any extra sound:
+```bash
+curl -sL "https://raw.githubusercontent.com/mgmobrien/red-alert-sounds/main/FILENAME.wav" \
+  -o "$HOME/.claude/skills/red-alert-hooks/sounds/FILENAME.wav"
+```
 
-### Add more hooks
-Claude Code supports additional events you can hook into:
-- `TaskCompleted` — when a todo task is checked off
-- `SubagentStop` — when a background agent finishes
-- `SessionEnd` — when the session closes
-- `PostCompact` — after context compaction completes
+Popular picks:
+| File | Content |
+|------|---------|
+| `ra_tanya_lets_rock.wav` | Tanya: "Let's rock!" |
+| `ra_shock_burn_baby_burn.wav` | "Burn baby burn!" |
+| `ra_yes_sir_soviet_infantry_1.wav` | Soviet accent "Yes sir!" |
+| `ra_mechanic_yee_haw.wav` | "Yee-haw!" |
+| `td_mission_accomplished.wav` | Tiberian Dawn version |
+| `ra_tanya_shake_it_baby.wav` | Tanya: "Shake it baby!" |
+
+Additional hook events you can add:
+| Event | When it fires |
+|-------|--------------|
+| `TaskCompleted` | A todo task is checked off |
+| `SubagentStop` | A background agent finishes |
+| `SessionEnd` | Session closes |
+| `PostCompact` | After context compaction |
 
 ### Reduce noise
-If `PostToolUse(Bash)` fires too often (every shell command), remove the Bash matcher entry from `PostToolUse` in `settings.json`.
+If `PostToolUse(Bash)` fires too often, remove the Bash matcher entry from `PostToolUse` in `settings.json`.
 
-### Download the entire library
+### Download the full library
 ```bash
 BASE="https://raw.githubusercontent.com/mgmobrien/red-alert-sounds/main"
-# Get full file list via GitHub API
+DEST="$HOME/.claude/skills/red-alert-hooks/sounds"
 curl -s "https://api.github.com/repos/mgmobrien/red-alert-sounds/contents/" \
   | python3 -c "
 import sys, json
@@ -290,6 +319,6 @@ for f in json.load(sys.stdin):
     if f['name'].endswith('.wav'):
         print(f['name'])
 " | while read fname; do
-  curl -sL "$BASE/$fname" -o "$SOUNDS_DIR/$fname" && echo "✓ $fname"
+  curl -sL "$BASE/$fname" -o "$DEST/$fname" && echo "✓ $fname"
 done
 ```
