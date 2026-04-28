@@ -2,17 +2,17 @@
 
 > Play classic **Command & Conquer: Red Alert** voice lines at key Claude Code lifecycle events. "Mission accomplished!", "Yes sir!", "Awaiting orders!" — your terminal just became a war room.
 
+[English](README.md) | [中文](README.zh.md)
+
 ---
 
 ## Demo
 
 | Event | Sound | Voice Line |
 |-------|-------|-----------|
-| 🚀 Session starts | `ra_construction_complete` | *Construction complete chime* |
+| 🚀 Session starts | `ra_yes_sir` | *"Yes sir!"* |
 | ✅ Claude finishes a turn | `ra_mission_accomplished` | *"Mission accomplished!"* |
 | 🔔 Notification | `ra_awaiting_orders` | *"Awaiting orders!"* |
-| 📝 File written / edited | `ra_yes_sir` | *"Yes sir!"* |
-| 💻 Bash command runs | `ra_mechanic_sure_thing_boss` | *"Sure thing, boss!"* |
 | ❌ Tool fails | `ra_mission_failed` | *"Mission failed"* |
 | 🕵️ Permission needed | `ra_spy_commander` | *"Commander."* |
 | ⚠️ Context compacting | `ra_base_under_attack` | *Base under attack alarm* |
